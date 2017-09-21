@@ -300,6 +300,8 @@ Elasticsearch.searchTopic = function(data, callback) {
 		});
 
 		var query = {
+			index: Elasticsearch.config.index_name,
+			type: Elasticsearch.config.post_type,
 			body: {
 				query: {
 					filtered: {
@@ -487,24 +489,30 @@ Elasticsearch.createIndex = function() {
 		return;
 	}
 	console.log('createIndex....');
+	var _type = Elasticsearch.config.post_type;
+	var properties = {
+		"properties": {
+			"title": {
+					"type": "string",
+					"analyzer": "ik_smart",
+					"search_analyzer": "ik_smart"
+			},
+			"content": {
+					"type": "string",
+					"analyzer": "ik_smart",
+					"search_analyzer": "ik_smart",
+					"include_in_all": "true",
+					"boost": 8
+			}
+		}
+	};
+	var mappings = {};
+	mappings[_type] = properties;
+
 	Elasticsearch.client.indices.create({
 		index: Elasticsearch.config.index_name,
-		type: Elasticsearch.config.post_type,
 		body: {
-	      "properties": {
-	        "title": {
-	            "type": "string",
-	            "analyzer": "ik_smart",
-	            "search_analyzer": "ik_smart"
-	        },
-	        "content": {
-	            "type": "string",
-	            "analyzer": "ik_smart",
-	            "search_analyzer": "ik_smart",
-	            "include_in_all": "true",
-	            "boost": 8
-	        }
-	      }
+			"mappings": mappings
 		}
 	}, function (err, resp, respcode) {
 		if ( err && /IndexAlreadyExistsException|index_already_exists_exception/im.test(err.message) ) {
