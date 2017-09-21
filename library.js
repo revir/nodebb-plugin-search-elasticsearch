@@ -238,6 +238,7 @@ Elasticsearch.search = function(data, callback) {
 
 	var query = {
 		index: Elasticsearch.config.index_name,
+		type: Elasticsearch.config.post_type,
 		body: {
 			query: {
 				match: queryMatch
@@ -247,12 +248,12 @@ Elasticsearch.search = function(data, callback) {
 		}
 	};
 	// changing the client obj
-	// console.log('search query', query);
+	console.log('search query: ', query);
 	client.search(query, function(err, obj) {
 		if (err) {
 			callback(err);
 		} else if (obj && obj.hits && obj.hits.hits && obj.hits.hits.length > 0) {
-			// console.log('search hits', obj.hits.hits);
+			console.log('search hits: ', obj.hits.hits);
 			var payload = obj.hits.hits.map(function(result) {
 				// return the correct post id
 				if (data.index === 'topic') {
@@ -260,7 +261,7 @@ Elasticsearch.search = function(data, callback) {
 				}
 				return parseInt(result._source.id, 10);
 			});
-
+			console.log('search payload: ', payload);
 			callback(null, payload);
 			//cache.set(data.query, payload);
 		} else {
