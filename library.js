@@ -217,12 +217,12 @@ Elasticsearch.search = function(data, callback) {
 		return callback(null, []);
 	}
 	var queryMatch = {
-		content: escapeSpecialChars(data.content)
+		content: data.content
 	};
 
 	if (data.index === 'topic') {
 		queryMatch = {
-			title: escapeSpecialChars(data.content)
+			title: data.content
 		};
 	}
 
@@ -248,7 +248,7 @@ Elasticsearch.search = function(data, callback) {
 		}
 	};
 	// changing the client obj
-	console.log('search query: ', query);
+	console.log('search query: ', query, queryMatch);
 	client.search(query, function(err, obj) {
 		if (err) {
 			callback(err);
@@ -308,7 +308,7 @@ Elasticsearch.searchTopic = function(data, callback) {
 					filtered: {
 						query: {
 							match: {
-								content: escapeSpecialChars(term)
+								content: term
 							}
 						},
 						filter: {
