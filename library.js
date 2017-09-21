@@ -636,7 +636,7 @@ Elasticsearch.indexTopic = function(topicObj, callback) {
 		// Also index the title into the main post of this topic
 		for(var x=0,numPids=payload.length;x<numPids;x++) {
 			if (payload[x]) {
-				if (payload[x].id === topicObj.mainPid) {
+				if (payload[x].id == topicObj.mainPid) {
 					payload[x].title = topicObj.title;
 
 					// add tid to main post, so search topic could get tid.
@@ -707,7 +707,8 @@ Elasticsearch.indexPost = function(postData, callback) {
 	}
 
 	var payload = {
-		id: postData.pid
+		id: postData.pid,
+		pid: postData.pid
 	};
 
 	// We are allowing posts with null content to be indexed.
