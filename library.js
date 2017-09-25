@@ -495,15 +495,13 @@ Elasticsearch.createIndex = function() {
 		"properties": {
 			"title": {
 					"type": "string",
-					"analyzer": "ik_smart",
-					"search_analyzer": "ik_smart"
+					"analyzer": "ik_max_word",
+					"search_analyzer": "ik_max_word"
 			},
 			"content": {
 					"type": "string",
-					"analyzer": "ik_smart",
-					"search_analyzer": "ik_smart",
-					"include_in_all": "true",
-					"boost": 8
+					"analyzer": "ik_max_word",
+					"search_analyzer": "ik_max_word"
 			}
 		}
 	};
