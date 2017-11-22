@@ -6,7 +6,7 @@ var db = module.parent.require('./database'),
 	winston = module.parent.require('winston'),
 	elasticsearch = require('elasticsearch'),
 	async = module.parent.require('async'),
-	_ = require('underscore'),
+	_ = module.parent.require('lodash'),
 
 	//LRU = require('lru-cache'),
 	//cache = LRU({ max: 20, maxAge: 1000 * 60 * 60 }),	// Remember the last 20 searches in the past hour
@@ -31,13 +31,14 @@ var db = module.parent.require('./database'),
 			enabled: undefined (false)
 		*/
 		config: {
-			sniffOnStart: true,             // Should the client attempt to detect the rest of the cluster when it is first instantiated?
+			sniffOnStart: false,             // Should the client attempt to detect the rest of the cluster when it is first instantiated?
 			sniffInterval: 60000,           // Every n milliseconds, perform a sniff operation and make sure our list of nodes is complete.
 			sniffOnConnectionFault: true,   // Should the client immediately sniff for a more current list of nodes when a connection dies?
 			host: 'localhost:9200',
 			index_name: 'nodebb',
 			post_type: 'posts',
 			batch_size: 1000
+			// log: "trace"
 		},	// default is localhost:9200
 		client: undefined
 	};
@@ -101,10 +102,10 @@ Elasticsearch.getNotices = function(notices, callback) {
 
 Elasticsearch.getSettings = function(callback) {
 	db.getObject('settings:elasticsearch', function(err, config) {
-		Elasticsearch.config = {};
+		// Elasticsearch.config = {};
 		if (!err) {
 			for(var k in config) {
-				if (config.hasOwnProperty(k) && config[k].length && !Elasticsearch.config.hasOwnProperty(k)) {
+				if (config.hasOwnProperty(k) && config[k].length) {
 					Elasticsearch.config[k] = config[k];
 				}
 			}
@@ -752,6 +753,7 @@ Elasticsearch.rebuildIndex = function(req, res) {
 							return currentPayload.concat(topics);
 						} else {
 							currentPayload.push(topics);
+							return currentPayload;
 						}
 					}, []).filter(function(entry) {
 						if (entry) {

@@ -32,7 +32,7 @@
   },
   "readmeFilename": "README.md",
   "dependencies": {
-    "elasticsearch": "^13.3.1",
+    "elasticsearch": "^14.0.0",
     "lru-cache": "^2.5.0",
     "underscore": "*",
     "underscore.string": "*"
