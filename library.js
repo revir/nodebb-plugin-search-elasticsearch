@@ -246,7 +246,7 @@ Elasticsearch.search = function(data, callback) {
 				match: queryMatch
 			},
 			from: 0,
-			size: 20
+			size: 200
 		}
 	};
 	// changing the client obj
@@ -480,9 +480,9 @@ Elasticsearch.flush = function(req, res) {
 	}, function(err, obj){
 		if (err) {
 			winston.error('[plugin/elasticsearch] Could not empty the search index');
-			res.send(500, err.message);
+			res.status(500).send(err.message);
 		} else {
-			res.send(200);
+			res.status(200).send('');
 		}
 	});
 };
@@ -782,7 +782,7 @@ Elasticsearch.rebuildIndex = function(req, res) {
 			if (err) winston.error(err);
 			else {
 				winston.info('Elasticsearch rebuild index done.');
-				res.sendStatus(200);
+				res.status(200).send('');
 			}
 		});
 	});
