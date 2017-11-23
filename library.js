@@ -31,14 +31,15 @@ var db = module.parent.require('./database'),
 			enabled: undefined (false)
 		*/
 		config: {
+			// apiVersion: '5.6',
 			sniffOnStart: false,             // Should the client attempt to detect the rest of the cluster when it is first instantiated?
-			sniffInterval: 60000,           // Every n milliseconds, perform a sniff operation and make sure our list of nodes is complete.
-			sniffOnConnectionFault: true,   // Should the client immediately sniff for a more current list of nodes when a connection dies?
+			sniffInterval: false,           // Every n milliseconds, perform a sniff operation and make sure our list of nodes is complete.
+			sniffOnConnectionFault: false,   // Should the client immediately sniff for a more current list of nodes when a connection dies?
 			host: 'localhost:9200',
 			index_name: 'nodebb',
 			post_type: 'posts',
-			batch_size: 1000
-			// log: "trace"
+			batch_size: 100,
+			log: "info"
 		},	// default is localhost:9200
 		client: undefined
 	};
@@ -64,9 +65,9 @@ Elasticsearch.init = function(data, callback) {
 	data.router.get('/api/admin/plugins/elasticsearch', data.middleware.applyCSRF, pluginMiddleware.ping, pluginMiddleware.getEnabled, pluginMiddleware.getStats, render);
 
 	// Utility
-	data.router.post('/admin/plugins/elasticsearch/rebuild', data.middleware.admin.isAdmin, Elasticsearch.rebuildIndex);
+	data.router.post('/admin/plugins/elasticsearch/rebuild', Elasticsearch.rebuildIndex);
 	data.router.post('/admin/plugins/elasticsearch/toggle', Elasticsearch.toggle);
-	data.router.delete('/admin/plugins/elasticsearch/flush', data.middleware.admin.isAdmin, Elasticsearch.flush);
+	data.router.delete('/admin/plugins/elasticsearch/flush', Elasticsearch.flush);
 
 	Elasticsearch.getSettings(Elasticsearch.connect);
 
@@ -214,16 +215,16 @@ Elasticsearch.search = function(data, callback) {
 		winston.warn('[plugin/elasticsearch] Another search plugin (dbsearch or solr) is enabled, so search via Elasticsearch was aborted.');
 		return callback(null, data);
 	}
-	if (!data.content) {
+	if (!data.query) {
 		return callback(null, []);
 	}
 	var queryMatch = {
-		content: data.content
+		content: data.query
 	};
 
 	if (data.index === 'topic') {
 		queryMatch = {
-			title: data.content
+			title: data.query
 		};
 	}
 
@@ -495,12 +496,14 @@ Elasticsearch.createIndex = function() {
 	var properties = {
 		"properties": {
 			"title": {
-					"type": "string",
-					"analyzer": "ik_max_word",
-					"search_analyzer": "ik_max_word"
+				"type": "text",
+				"index": true,
+				"analyzer": "ik_max_word",
+				"search_analyzer": "ik_max_word"
 			},
 			"content": {
-					"type": "string",
+					"type": "text",
+					"index": true,
 					"analyzer": "ik_max_word",
 					"search_analyzer": "ik_max_word"
 			}
@@ -515,7 +518,7 @@ Elasticsearch.createIndex = function() {
 			"mappings": mappings
 		}
 	}, function (err, resp, respcode) {
-		if ( err && /IndexAlreadyExistsException|index_already_exists_exception/im.test(err.message) ) {
+		if ( err && /IndexAlreadyExistsException|index_already_exists_exception|resource_already_exists_exception/im.test(err.message) ) {
 			winston.info('Elasticsearch index already exists.');
 		} else if (err) {
 			winston.error('Elasticsearch create index failed');
@@ -621,11 +624,15 @@ Elasticsearch.indexTopic = function(topicObj, callback) {
 			posts.getPostsFields(pids, ['pid', 'content'], next);
 		},
 		function(posts, next) {
+			posts = posts.filter(function (post) {
+				return post && post.pid && post.content;
+			});
 			async.map(posts, Elasticsearch.indexPost, next);
 		}
 	], function(err, payload) {
 		if (err) {
 			winston.error('[plugins/elasticsearch] Encountered an error while compiling post data for tid ' + topicObj.tid);
+			winston.error(err);
 
 			if (typeof callback === 'function') {
 				return callback(err);
@@ -725,7 +732,7 @@ Elasticsearch.indexPost = function(postData, callback) {
 Elasticsearch.deindexPost = Elasticsearch.post.delete;
 
 Elasticsearch.rebuildIndex = function(req, res) {
-
+	winston.info('Elasticsearch delete all by query *');
 	async.waterfall([
 		function(next) {
 			Elasticsearch.client.deleteByQuery({
@@ -741,7 +748,7 @@ Elasticsearch.rebuildIndex = function(req, res) {
 		// 	res.sendStatus(500);
 		// 	return
 		// }
-
+		winston.info("Elasticsearch start to rebuild index by process all topics");
 		batch.processSortedSet('topics:tid', function(tids, next) {
 			topics.getTopicsFields(tids, ['tid', 'mainPid', 'title'], function(err, topics) {
 				if (err) {
@@ -772,7 +779,9 @@ Elasticsearch.rebuildIndex = function(req, res) {
 				});
 			});
 		}, {batch: parseInt(Elasticsearch.config.batch_size, 10)}, function(err) {
-			if (!err) {
+			if (err) winston.error(err);
+			else {
+				winston.info('Elasticsearch rebuild index done.');
 				res.sendStatus(200);
 			}
 		});
