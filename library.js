@@ -13,6 +13,7 @@ var db = module.parent.require('./database'),
 
 	topics = module.parent.require('./topics'),
 	posts = module.parent.require('./posts'),
+	user = module.parent.require('./user'),
 	batch = module.parent.require('./batch'),
 
 	escapeSpecialChars = function(s) {
@@ -215,17 +216,13 @@ Elasticsearch.search = function(data, callback) {
 		winston.warn('[plugin/elasticsearch] Another search plugin (dbsearch or solr) is enabled, so search via Elasticsearch was aborted.');
 		return callback(null, data);
 	}
+
 	if (!data.query) {
 		return callback(null, []);
 	}
-	var queryMatch = {
-		content: data.query
-	};
 
 	if (data.index === 'topic') {
-		queryMatch = {
-			title: data.query
-		};
+		return callback(null, []);
 	}
 
 	/*
@@ -243,7 +240,10 @@ Elasticsearch.search = function(data, callback) {
 		type: Elasticsearch.config.post_type,
 		body: {
 			query: {
-				match: queryMatch
+				multi_match: {
+					query: data.query,
+					fields: ["title", "content", "username", "fullname"]
+				}
 			},
 			from: 0,
 			size: 200
@@ -504,8 +504,16 @@ Elasticsearch.createIndex = function() {
 			"content": {
 					"type": "text",
 					"index": true,
-					"analyzer": "ik_max_word",
-					"search_analyzer": "ik_max_word"
+					"analyzer": "ik_smart",
+					"search_analyzer": "ik_smart"
+			},
+			"username": {
+					"type": "text",
+					"index": true
+			},
+			"fullname": {
+					"type": "text",
+					"index": true
 			}
 		}
 	};
@@ -530,20 +538,21 @@ Elasticsearch.createIndex = function() {
 };
 
 Elasticsearch.post = {};
-Elasticsearch.post.save = function(obj) {
+Elasticsearch.post.save = function(postData) {
 	if (!parseInt(Elasticsearch.config.enabled, 10)) {
 		return;
 	}
 
-	Elasticsearch.indexPost(obj.post);
+	Elasticsearch.indexPost(postData);
 };
 
-Elasticsearch.post.delete = function(obj, callback) {
+Elasticsearch.post.delete = function(pid, callback) {
 	if (!parseInt(Elasticsearch.config.enabled, 10)) {
 		return;
 	}
 
-	Elasticsearch.remove(obj.post.pid);
+	console.log('deletePost: ', pid);
+	Elasticsearch.remove(pid);
 
 	if (typeof callback === 'function') {
 		if (!parseInt(Elasticsearch.config.enabled, 10)) {
@@ -554,58 +563,58 @@ Elasticsearch.post.delete = function(obj, callback) {
 	}
 };
 
-Elasticsearch.post.restore = function(obj) {
+Elasticsearch.post.restore = function(postData) {
 	if (!parseInt(Elasticsearch.config.enabled, 10)) {
 		return;
 	}
 
-	Elasticsearch.indexPost(obj.post);
+	Elasticsearch.indexPost(postData);
 };
 
 Elasticsearch.post.edit = Elasticsearch.post.restore;
 
 Elasticsearch.topic = {};
-Elasticsearch.topic.post = function(obj) {
+Elasticsearch.topic.post = function(topicData) {
 	if (!parseInt(Elasticsearch.config.enabled, 10)) {
 		return;
 	}
 
-	Elasticsearch.indexTopic(obj.topic);
+	Elasticsearch.indexTopic(topicData);
 };
 
-Elasticsearch.topic.delete = function(obj) {
+Elasticsearch.topic.delete = function(topicObj) {
+	if (!parseInt(Elasticsearch.config.enabled, 10)) {
+		return;
+	}
+	var tid = (void 0 === topicObj.tid) ? topicObj : topicObj.tid;
+	Elasticsearch.deindexTopic(tid);
+};
+
+Elasticsearch.topic.restore = function(topicData) {
 	if (!parseInt(Elasticsearch.config.enabled, 10)) {
 		return;
 	}
 
-	Elasticsearch.deindexTopic(obj.topic.tid);
+	Elasticsearch.indexTopic(topicData);
 };
 
-Elasticsearch.topic.restore = function(obj) {
-	if (!parseInt(Elasticsearch.config.enabled, 10)) {
-		return;
-	}
-
-	Elasticsearch.indexTopic(obj.topic);
-};
-
-Elasticsearch.topic.edit = function(obj) {
+Elasticsearch.topic.edit = function(topicData) {
 	if (!parseInt(Elasticsearch.config.enabled, 10)) {
 		return;
 	}
 
 	async.waterfall([
-		async.apply(posts.getPostFields, obj.topic.mainPid, ['pid', 'content']),
+		async.apply(posts.getPostFields, topicData.mainPid, ['pid', 'content']),
 		Elasticsearch.indexPost,
 	], function(err, payload) {
 		if (err) {
 			return winston.error(err.message);
 		}
 		if (!payload) {
-			return winston.warn('[plugins/elasticsearch] no payload for pid ' + obj.topic.mainPid);
+			return winston.warn('[plugins/elasticsearch] no payload for pid ' + topicData.mainPid);
 		}
 
-		payload.title = obj.topic.title;
+		payload.title = topicData.title;
 		Elasticsearch.add(payload);
 	});
 };
@@ -621,7 +630,7 @@ Elasticsearch.indexTopic = function(topicObj, callback) {
 				pids.unshift(topicObj.mainPid);
 			}
 
-			posts.getPostsFields(pids, ['pid', 'content'], next);
+			posts.getPostsFields(pids, ['pid', 'uid', 'content'], next);
 		},
 		function(posts, next) {
 			posts = posts.filter(function (post) {
@@ -683,6 +692,8 @@ Elasticsearch.deindexTopic = function(tid) {
 			return p;
 		});
 
+		console.log('deindexTopic: ', data.pids);
+
 		var query = {
 			index: Elasticsearch.config.index_name,
 			type: Elasticsearch.config.post_type,
@@ -722,11 +733,34 @@ Elasticsearch.indexPost = function(postData, callback) {
 		payload.content = postData.content;
 	}
 
-	if (typeof callback === 'function') {
-		callback(undefined, payload);
-	} else {
-		Elasticsearch.add(payload);
-	}
+	async.waterfall([
+		function (next) {
+			if (postData.uid && !postData.user) {
+				user.getUserFields(postData.uid, ['username', 'fullname'], next);
+			} else {
+				next(null, postData.user || '');
+			}
+		}
+	], function (err, userData) {
+		if (err) {
+			if (typeof callback === 'function') {
+				callback(err);
+			} else {
+				winston.error(err);
+			}
+		} else {
+			if (userData) {
+				payload.username = userData.username;
+				payload.fullname = userData.fullname;
+			}
+			if (typeof callback === 'function') {
+				callback(undefined, payload);
+			} else {
+				console.log('indexPost', payload);
+				Elasticsearch.add(payload);
+			}
+		}
+	});
 };
 
 Elasticsearch.deindexPost = Elasticsearch.post.delete;
