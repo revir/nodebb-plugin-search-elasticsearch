@@ -227,6 +227,24 @@ Elasticsearch.search = function(data, callback) {
 		};
 	}
 
+	var queryWrapper = {
+		match: queryMatch
+	};
+	if (data.cids) {
+		var cidsMatch = {
+			cid: data.cids
+		};
+		queryWrapper.terms = cidsMatch;
+	}
+
+	if (data.uids) {
+		var uidsMatch = {
+			cid: data.uids
+		};
+		queryWrapper.terms = uidsMatch;
+	}
+
+
 	/*
 	if (cache.has(data.query)) {
 		return callback(null, cache.get(data.query));
@@ -241,9 +259,7 @@ Elasticsearch.search = function(data, callback) {
 		index: Elasticsearch.config.index_name,
 		type: Elasticsearch.config.post_type,
 		body: {
-			query: {
-				match: queryMatch
-			},
+			query: queryWrapper,
 			from: 0,
 			size: 20
 		}
@@ -503,6 +519,12 @@ Elasticsearch.createIndex = function() {
 					"type": "string",
 					"analyzer": "ik_max_word",
 					"search_analyzer": "ik_max_word"
+			},
+			"cid": {
+				type: "integer"
+			},
+			"uid": {
+				type: "integer"
 			}
 		}
 	};
@@ -592,7 +614,7 @@ Elasticsearch.topic.edit = function(obj) {
 	}
 
 	async.waterfall([
-		async.apply(posts.getPostFields, obj.topic.mainPid, ['pid', 'content']),
+		async.apply(posts.getPostFields, obj.topic.mainPid, ['pid', 'content', 'uid']),
 		Elasticsearch.indexPost,
 	], function(err, payload) {
 		if (err) {
@@ -618,7 +640,7 @@ Elasticsearch.indexTopic = function(topicObj, callback) {
 				pids.unshift(topicObj.mainPid);
 			}
 
-			posts.getPostsFields(pids, ['pid', 'content'], next);
+			posts.getPostsFields(pids, ['pid', 'content', 'uid'], next);
 		},
 		function(posts, next) {
 			async.map(posts, Elasticsearch.indexPost, next);
@@ -707,7 +729,8 @@ Elasticsearch.indexPost = function(postData, callback) {
 
 	var payload = {
 		id: postData.pid,
-		pid: postData.pid
+		pid: postData.pid,
+		uid: parseInt(postData.uid, 10)
 	};
 
 	// We are allowing posts with null content to be indexed.
@@ -715,11 +738,22 @@ Elasticsearch.indexPost = function(postData, callback) {
 		payload.content = postData.content;
 	}
 
-	if (typeof callback === 'function') {
-		callback(undefined, payload);
-	} else {
-		Elasticsearch.add(payload);
-	}
+	posts.getCidByPid(postData.pid, function (err, cid) {
+		if (err) {
+			if (typeof callback === 'function') {
+				callback(err);
+			} else {
+				winston.error(err);
+			}
+		} else {
+			payload.cid = parseInt(cid, 10);
+			if (typeof callback === 'function') {
+				callback(undefined, payload);
+			} else {
+				Elasticsearch.add(payload);
+			}
+		}
+	});
 };
 
 Elasticsearch.deindexPost = Elasticsearch.post.delete;
