@@ -232,18 +232,18 @@ Elasticsearch.search = function(data, callback) {
 			match: queryMatch
 		}
 	};
-	if (data.cids) {
+	if (data.cid) {
 		var cidsMatch = {
-			cid: data.cids
+			cid: data.cid
 		};
 		queryWrapper.filter = {
 			terms: cidsMatch
 		};
 	}
 
-	if (data.uids) {
+	if (data.uid) {
 		var uidsMatch = {
-			cid: data.uids
+			uid: data.uid
 		};
 		queryWrapper.filter = {
 			terms: uidsMatch
