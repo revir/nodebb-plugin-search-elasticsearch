@@ -232,7 +232,7 @@ Elasticsearch.search = function(data, callback) {
 			match: queryMatch
 		}
 	};
-	if (data.cid) {
+	if (data.cid && data.cid.length) {
 		var cidsMatch = {
 			cid: data.cid
 		};
@@ -241,7 +241,7 @@ Elasticsearch.search = function(data, callback) {
 		};
 	}
 
-	if (data.uid) {
+	if (data.uid && data.uid.length) {
 		var uidsMatch = {
 			uid: data.uid
 		};
