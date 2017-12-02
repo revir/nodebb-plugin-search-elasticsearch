@@ -228,20 +228,26 @@ Elasticsearch.search = function(data, callback) {
 	}
 
 	var queryWrapper = {
-		match: queryMatch
+		must: {
+			match: queryMatch
+		}
 	};
 	if (data.cids) {
 		var cidsMatch = {
 			cid: data.cids
 		};
-		queryWrapper.terms = cidsMatch;
+		queryWrapper.filter = {
+			terms: cidsMatch
+		};
 	}
 
 	if (data.uids) {
 		var uidsMatch = {
 			cid: data.uids
 		};
-		queryWrapper.terms = uidsMatch;
+		queryWrapper.filter = {
+			terms: uidsMatch
+		};
 	}
 
 
@@ -259,7 +265,9 @@ Elasticsearch.search = function(data, callback) {
 		index: Elasticsearch.config.index_name,
 		type: Elasticsearch.config.post_type,
 		body: {
-			query: queryWrapper,
+			query: {
+				bool: queryWrapper
+			},
 			from: 0,
 			size: 20
 		}
